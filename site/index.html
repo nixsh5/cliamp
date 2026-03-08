@@ -524,7 +524,7 @@
     flex-wrap:wrap;
   }
   .radio-globe-canvas{
-    width:320px;height:320px;
+    width:320px;aspect-ratio:1;max-width:100%;
     cursor:grab;
     opacity:0;transition:opacity .8s ease;
   }
@@ -549,7 +549,8 @@
   }
   @media(max-width:720px){
     .radio-globe-wrap{justify-content:center}
-    .radio-globe-canvas{width:260px;height:260px}
+    .radio-globe-canvas{width:260px}
+    .radio-big-number{font-size:28px}
   }
   .radio-error{
     color:#8a92b0;font-size:12px;
@@ -674,6 +675,10 @@
   @media(max-width:480px){
     .themes-grid{grid-template-columns:1fr}
     .nav-links a:nth-child(n+4){display:none}
+    .radio-globe-canvas{width:100%}
+    .radio-big-number{font-size:24px}
+    .radio-tabs{width:100%}
+    .radio-tab{flex:1;padding:8px 12px;font-size:10px}
   }
 </style>
 </head>
@@ -1211,7 +1216,7 @@
       <div class="radio-card radio-card--wide">
         <div class="radio-card-title">Listeners Around the World</div>
         <div class="radio-globe-wrap">
-          <canvas class="radio-globe-canvas" id="radio-globe" width="640" height="640"></canvas>
+          <canvas class="radio-globe-canvas" id="radio-globe"></canvas>
           <div class="radio-countries" id="radio-countries"></div>
         </div>
       </div>
@@ -1456,29 +1461,44 @@ var countryCoords={
 };
 
 /* ── COBE globe ── */
+var _globeDestroy=null;
+var _globeResizeTimer=null;
+
 function initGlobe(countries){
   var canvas=document.getElementById("radio-globe");
   if(!canvas||typeof createGlobe==="undefined")return;
+
+  /* Clean up previous globe instance */
+  if(_globeDestroy){try{_globeDestroy()}catch(e){}_globeDestroy=null;}
+
+  /* Size the buffer to match the actual CSS display size */
+  var size=canvas.offsetWidth||320;
+  if(size<10)return; /* not laid out yet */
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  if(size<200)dpr=1; /* save GPU on tiny screens */
+  var buf=size*dpr;
+  canvas.width=buf;
+  canvas.height=buf;
 
   var maxSessions=Math.max.apply(null,countries.map(function(c){return c.sessions}))||1;
   var markers=[];
   countries.forEach(function(c){
     var coords=countryCoords[c.country_code];
     if(!coords)return;
-    var size=0.03+0.12*(c.sessions/maxSessions);
-    markers.push({location:coords,size:size});
+    var s=0.03+0.12*(c.sessions/maxSessions);
+    markers.push({location:coords,size:s});
   });
 
   var phi=0;
-  var globe=createGlobe(canvas,{
-    devicePixelRatio:2,
-    width:640,
-    height:640,
+  _globeDestroy=createGlobe(canvas,{
+    devicePixelRatio:dpr,
+    width:buf,
+    height:buf,
     phi:0,
     theta:0.15,
     dark:1,
     diffuse:1.2,
-    mapSamples:16000,
+    mapSamples:size<280?8000:16000,
     mapBrightness:6,
     baseColor:[0.05,0.05,0.15],
     markerColor:[0.45,0.82,1],
@@ -1491,6 +1511,14 @@ function initGlobe(countries){
   });
   canvas.classList.add("loaded");
 }
+
+/* Re-create globe on resize (e.g. orientation change) */
+window.addEventListener("resize",function(){
+  clearTimeout(_globeResizeTimer);
+  _globeResizeTimer=setTimeout(function(){
+    if(window._radioCountries)initGlobe(window._radioCountries);
+  },300);
+});
 
 renderRadioStats();
 </script>
